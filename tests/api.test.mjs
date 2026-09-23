@@ -1,0 +1,48 @@
+import {normalizeExtensions} from '../frontend/extensions.js';import {defaultCourses} from '../frontend/course-catalog.js';
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';import {DatabaseSync} from 'node:sqlite';import {webcrypto} from 'node:crypto';import {sections} from '../frontend/content.js';import {freshTracking,normalizeTracking,safeTrainingURL} from '../frontend/tracking-data.js';
+const sql=new DatabaseSync(':memory:');for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(fs.readFileSync('drizzle/'+file,'utf8').replaceAll('--> statement-breakpoint',''));
+const prepare=text=>({values:[],bind(...values){this.values=values;return this},async first(){return sql.prepare(text).get(...this.values)||null},async all(){return {results:sql.prepare(text).all(...this.values)}},async run(){const result=sql.prepare(text).run(...this.values);return{meta:{changes:Number(result.changes)}}}});
+const db={prepare,async batch(items){sql.exec('BEGIN');try{const results=[];for(const q of items)results.push(await q.run());sql.exec('COMMIT');return results}catch(e){sql.exec('ROLLBACK');throw e}}};
+const module={exports:{}};const context=vm.createContext({module,exports:module.exports,require:id=>id==='@/db/raw'?{database:()=>db,runtimeSecrets:()=>({CREDENTIAL_ENCRYPTION_KEY:'a'.repeat(64),AGENT_TRAINING_CODE:'test-agent-code',ADMIN_TRAINING_CODE:'test-admin-code'})}:id.includes('tracking-data')?{normalizeTracking,safeTrainingURL}:id.includes('extensions')?{normalizeExtensions}:id.includes('course-catalog')?{defaultCourses}:{sections},Response,Request,URL,TextEncoder,TextDecoder,crypto:webcrypto,console});const js=ts.transpileModule(fs.readFileSync('app/api/blueprint/[[...path]]/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;vm.runInContext(js,context);const handler=module.exports.GET;
+const blank=()=>({schemaVersion:1,sections:Object.fromEntries(sections.map(s=>[s.id,{values:{},rows:[],notes:'',reviewed:false,deferred:false}])),tracking:freshTracking()});
+async function call(path,method='GET',body,who='stephanie@omycare.fr',origin='https://test.example'){const headers={'Content-Type':'application/json',origin};if(who){headers['oai-authenticated-user-id']='verified-'+who;headers['oai-authenticated-user-email']=who}const r=await handler(new Request('https://test.example/api/blueprint/'+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})}));return{status:r.status,data:await r.json()}}
+assert.equal((await call('session','GET',null,'')).status,401);let created=await call('projects','POST',{name:'A',data:blank()});assert.equal(created.status,201);const id=created.data.id;assert.equal((await call('projects/'+id,'GET',null,'a@example.com')).status,404);assert.equal((await call('projects','POST',{name:'hack',data:blank()},'a@example.com')).status,403);
+assert.equal((await call('projects/'+id+'/members','POST',{email:'a@example.com'})).status,200);
+assert.equal((await call('catalog','PUT',{revision:0,resources:[{id:'course',fr:'Formation',en:'Training',url:'https://training.example/course'}]})).status,200);
+let p=await call('projects/'+id,'GET',null,'a@example.com');assert.equal(p.status,200);assert.equal(p.data.trainingResources.length,0);assert.equal((await call('catalog','GET',null,'a@example.com')).status,403);
+let project=p.data.data;project.tracking.trainingIncluded=true;project.tracking.meetings[0].done=true;project.tracking.tasks[0].status='done';project.sections.company.values.name='Client edit';assert.equal((await call('projects/'+id,'PUT',{revision:p.data.revision,data:project},'a@example.com')).status,200);p=await call('projects/'+id);assert.equal(p.data.data.tracking.meetings[0].done,false);assert.equal(p.data.data.tracking.tasks[0].status,'todo');assert.equal(p.data.data.tracking.trainingIncluded,false);assert.equal(p.data.data.sections.company.values.name,'Client edit');
+assert.equal((await call('projects/'+id,'PUT',{revision:1,data:project})).status,409);
+project=p.data.data;project.tracking.trainingIncluded=true;project.tracking.trainingIds=['course'];project.tracking.meetings[0]={id:1,done:true,date:'2026-09-22',note:'Kickoff'};await call('projects/'+id,'PUT',{revision:p.data.revision,data:project});p=await call('projects/'+id,'GET',null,'a@example.com');assert.equal(p.data.trainingResources.length,1);assert.equal(p.data.data.tracking.meetings[0].done,true);
+const second=(await call('projects','POST',{name:'B',data:blank()})).data.id;assert.equal((await call('projects/'+second,'GET',null,'a@example.com')).status,404);assert.equal((await call('projects','GET',null,'a@example.com')).data.projects.length,1);assert.equal((await call('projects/'+id+'/members','POST',{email:'intruder@example.com'},'a@example.com')).status,403);assert.equal((await call('projects/'+id,'PUT',{revision:p.data.revision,data:project},'stephanie@omycare.fr','https://other.example')).status,403);
+assert.ok(p.data.events.length>=3);
+// Codes are validated server-side and hidden links require entitlement.
+const cat=await call('catalog');
+await call('catalog','PUT',{revision:cat.data.revision,resources:defaultCourses});
+p=await call('projects/'+id);project=p.data.data;project.tracking.trainingIds=['omycare-agents'];
+await call('projects/'+id,'PUT',{revision:p.data.revision,data:project});
+const clientView=await call('projects/'+id,'GET',null,'a@example.com');
+assert.equal(clientView.data.trainingResources[0].requiresCode,true);
+assert.equal(clientView.data.trainingResources[0].url,undefined);
+assert.equal((await call('projects/'+id+'/training/omycare-admins/unlock','POST',{code:'test-admin-code'},'a@example.com')).status,403);
+assert.equal((await call('projects/'+id+'/training/omycare-agents/unlock','POST',{code:'wrong'},'a@example.com')).status,403);
+assert.equal((await call('projects/'+id+'/training/omycare-agents/unlock','POST',{code:'test-agent-code'},'a@example.com')).data.url,defaultCourses[0].url);
+for(let i=0;i<6;i++)await call('projects/'+id+'/training/omycare-agents/unlock','POST',{code:'wrong'},'a@example.com');
+assert.equal((await call('projects/'+id+'/training/omycare-agents/unlock','POST',{code:'test-agent-code'},'a@example.com')).status,429);
+// Temporary access is encrypted, isolated, omitted from project data, and consumed once.
+const secret={username:'temporary-user',password:'Do-not-export-this-secret'};
+assert.equal((await call('projects/'+id+'/credentials','POST',secret,'a@example.com')).status,200);
+const encrypted=sql.prepare('SELECT * FROM blueprint_credentials WHERE project_id=?').get(id);
+assert.ok(!JSON.stringify(encrypted).includes(secret.password));
+assert.equal((await call('projects/'+id+'/credentials','GET',null,'a@example.com')).data.pending,true);
+assert.equal((await call('projects/'+id+'/credentials/reveal','POST',{},'a@example.com')).status,403);
+assert.equal((await call('projects/'+id+'/credentials/reveal','POST',{},'stranger@example.com')).status,404);
+assert.ok(!JSON.stringify((await call('projects/'+id)).data).includes(secret.password));
+assert.deepEqual((await call('projects/'+id+'/credentials/reveal','POST',{})).data,secret);
+assert.equal((await call('projects/'+id+'/credentials/reveal','POST',{})).status,404);
+await call('projects/'+id+'/credentials','POST',secret,'a@example.com');
+sql.prepare('UPDATE blueprint_credentials SET expires_at=1 WHERE project_id=?').run(id);
+assert.equal((await call('projects/'+id+'/credentials/reveal','POST',{})).status,404);
+assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM blueprint_credentials').get().n,0);
+assert.equal((await call('projects/'+id+'/credentials','POST',secret,'a@example.com','https://evil.example')).status,403);
+console.log('PASS: training codes, entitlement, rate limit, encrypted handover, one-time retrieval, expiry, no secrets in project data.');
+console.log('PASS: real SQLite-backed API; authentication, project isolation, consultant permissions, client edits, hidden training links, revision conflicts, shared catalog, eight meetings and audit log.');

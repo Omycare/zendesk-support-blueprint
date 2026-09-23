@@ -1,0 +1,17 @@
+node_modules/
+.sites-runtime/
+*.xlsx
+client-exports/
+
+dist/
+.next/
+.wrangler/
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+
+pages-dist/
+
+public/blueprint/
