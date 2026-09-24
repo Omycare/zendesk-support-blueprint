@@ -2,6 +2,10 @@
 
 French/English Zendesk discovery portal and shared implementation tracker. Built for Stephanie (`stephanie@omycare.fr`). See `docs/BLUEPRINT.md` for the complete Spanish handover.
 
+## Firebase version prepared
+
+The new email/Google sign-in version is in [`firebase/`](firebase/README.md), configured for `omycare-portal`. It adds per-context conversations and private internal notes, with 19 new passing model, DOM and Firestore-emulator tests. It has **not been deployed to Firebase**; provider activation, deployment authorization and the first administrator are still required. The existing published versions described below remain in place.
+
 ## Delivered functionality
 
 - Fourteen guided stages; examples, spreadsheet-style paste, previews inspired by Zendesk Support, conditional forms, nested dropdowns, view folders, macros, routing and simplified SLA comparison.

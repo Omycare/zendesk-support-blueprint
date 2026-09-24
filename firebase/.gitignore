@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.firebase/
+*-debug.log
+*-debug.*.log
+playwright-report/
+test-results/
+.env*

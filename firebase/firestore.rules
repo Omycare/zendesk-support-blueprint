@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function verified() {
+      return request.auth != null && request.auth.token.email_verified == true && request.auth.token.email is string;
+    }
+    function admin() {
+      return verified() && exists(/databases/$(database)/documents/administrators/$(request.auth.uid))
+        && get(/databases/$(database)/documents/administrators/$(request.auth.uid)).data.enabled == true;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function member(data) { return verified() && email() in data.memberEmails; }
+    function access(pid) {
+      return admin() || (verified() && member(get(/databases/$(database)/documents/projects/$(pid)).data));
+    }
+    function threadAccess(pid, bucket) {
+      return (bucket == 'threads' && access(pid)) || (bucket == 'internalThreads' && admin());
+    }
+    function validProject(data) {
+      return data.keys().hasOnly(['name','data','memberEmails','revision','createdAt','createdBy','updatedAt','lastEventId'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.memberEmails is list && data.memberEmails.size() <= 50
+        && data.revision is int && data.revision > 0
+        && data.data is map && data.data.keys().hasOnly(['schemaVersion','lang','step','tracking','extensions','workspace','sections'])
+        && data.data.schemaVersion == 1 && data.data.lang in ['fr','en']
+        && data.data.sections is map && data.data.tracking is map && data.data.extensions is map
+        && data.data.workspace is map && data.data.workspace.driveFolderUrl is string
+        && data.data.tracking.trainingIncluded is bool && data.data.tracking.trainingIds is list
+        && data.data.tracking.trainingIds.size() <= 20
+        && data.createdBy is string && data.createdAt is timestamp
+        && data.updatedAt == request.time && data.lastEventId is string;
+    }
+    function linkedEvent(pid, data) {
+      let event = getAfter(/databases/$(database)/documents/projects/$(pid)/events/$(data.lastEventId)).data;
+      return event.revision == data.revision && event.actorId == request.auth.uid && event.at == request.time;
+    }
+    // Bootstrap administrators only through the Firebase console or a trusted admin tool.
+    match /administrators/{uid} {
+      allow get: if verified() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+    match /settings/{id} {
+      allow read: if admin();
+      allow create: if admin() && id == 'catalog' && request.resource.data.keys().hasOnly(['revision','resources'])
+        && request.resource.data.revision == 1 && request.resource.data.resources is list && request.resource.data.resources.size() <= 20;
+      allow update: if admin() && id == 'catalog' && request.resource.data.keys().hasOnly(['revision','resources'])
+        && request.resource.data.revision == resource.data.revision + 1 && request.resource.data.resources is list && request.resource.data.resources.size() <= 20;
+    }
+    match /projects/{pid} {
+      allow read: if admin() || member(resource.data);
+      allow create: if admin() && validProject(request.resource.data)
+        && request.resource.data.revision == 1 && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time && linkedEvent(pid, request.resource.data);
+      allow update: if access(pid) && validProject(request.resource.data)
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.createdBy == resource.data.createdBy
+        && linkedEvent(pid, request.resource.data)
+        && (admin() || (
+          request.resource.data.memberEmails == resource.data.memberEmails
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.data.tracking == resource.data.data.tracking
+          && request.resource.data.data.workspace.driveFolderUrl == resource.data.data.workspace.driveFolderUrl
+        ));
+      allow delete: if false;
+      match /events/{eventId} {
+        allow read: if access(pid);
+        allow create: if access(pid) && request.resource.data.keys().hasOnly(['actor','actorId','at','changes','revision'])
+          && request.resource.data.actorId == request.auth.uid && request.resource.data.actor == email()
+          && request.resource.data.at == request.time && request.resource.data.changes is list && request.resource.data.changes.size() <= 60
+          && getAfter(/databases/$(database)/documents/projects/$(pid)).data.lastEventId == eventId
+          && getAfter(/databases/$(database)/documents/projects/$(pid)).data.revision == request.resource.data.revision;
+        allow update, delete: if false;
+      }
+      match /training/{courseId} {
+        allow read: if admin() || (access(pid)
+          && get(/databases/$(database)/documents/projects/$(pid)).data.data.tracking.trainingIncluded == true
+          && courseId in get(/databases/$(database)/documents/projects/$(pid)).data.data.tracking.trainingIds);
+        allow write: if admin();
+      }
+      match /readReceipts/{uid} {
+        allow read: if access(pid) && request.auth.uid == uid;
+        allow create, update: if access(pid) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['seen','updatedAt']) && request.resource.data.seen is map
+          && request.resource.data.seen.size() <= 1000 && request.resource.data.updatedAt == request.time;
+      }
+      match /{bucket}/{tid} {
+        function newMessage() {
+          return getAfter(/databases/$(database)/documents/projects/$(pid)/$(bucket)/$(tid)/messages/$(request.resource.data.lastMessageId)).data;
+        }
+        function validThread() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['target','title','status','createdBy','createdAt','updatedAt','messageCount','lastMessageId'])
+            && d.target is string && d.target.size() > 0 && d.target.size() <= 220
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 240
+            && d.status in ['open','resolved'] && d.updatedAt == request.time
+            && d.createdAt is timestamp && d.createdBy is string && d.messageCount is int;
+        }
+        allow read: if threadAccess(pid, bucket);
+        allow create: if threadAccess(pid, bucket) && validThread() && request.resource.data.status == 'open'
+          && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+          && request.resource.data.messageCount == 1
+          && newMessage().authorId == request.auth.uid && newMessage().createdAt == request.time;
+        allow update: if threadAccess(pid, bucket) && validThread()
+          && request.resource.data.target == resource.data.target && request.resource.data.title == resource.data.title
+          && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt
+          && ((request.resource.data.messageCount == resource.data.messageCount + 1
+            && request.resource.data.lastMessageId != resource.data.lastMessageId
+            && newMessage().authorId == request.auth.uid && newMessage().createdAt == request.time)
+            || (request.resource.data.messageCount == resource.data.messageCount
+            && request.resource.data.lastMessageId == resource.data.lastMessageId));
+        allow delete: if false;
+        match /messages/{mid} {
+          allow read: if threadAccess(pid, bucket);
+          allow create: if threadAccess(pid, bucket)
+            && request.resource.data.keys().hasOnly(['text','authorId','authorEmail','createdAt'])
+            && request.resource.data.authorId == request.auth.uid && request.resource.data.authorEmail == email()
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 6000
+            && getAfter(/databases/$(database)/documents/projects/$(pid)/$(bucket)/$(tid)).data.lastMessageId == mid
+            && getAfter(/databases/$(database)/documents/projects/$(pid)/$(bucket)/$(tid)).data.updatedAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+    }
+  }
+}

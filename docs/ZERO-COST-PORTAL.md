@@ -1,6 +1,8 @@
 # OmyCare — portal central sin nuevas suscripciones
 
-24 de septiembre de 2026 · Decisión de arquitectura · Propuesta, todavía no implementada
+24 de septiembre de 2026 · Decisión de arquitectura · Código Firebase preparado; publicación pendiente
+
+La configuración del proyecto `omycare-portal` ya fue proporcionada por Stephanie y la implementación está preparada y probada en [`firebase/`](../firebase/README.md). Todavía no se desplegó ni se migraron datos reales. Este documento conserva la justificación de la arquitectura; el estado operativo y las instrucciones vigentes están en la guía Firebase.
 
 ## Recomendación
 
@@ -108,3 +110,4 @@ Supabase también ofrece una modalidad gratuita, pero su servidor de correo incl
 No se creó un proyecto Firebase, no se activó facturación y no se migraron datos en esta evaluación. El portal compartido actual sigue utilizando su alojamiento y acceso mediante ChatGPT; Pages sigue siendo la demostración local. Esta entrega actualiza la decisión técnica y no anuncia una migración terminada.
 
 Si el requisito definitivo fuera «solo GitHub, sin ningún servicio externo», no se cumplirían a la vez el guardado compartido y el aislamiento real entre clientes. Duplicar páginas tampoco resuelve esa limitación. En ese caso, los documentos de trabajo tendrían que permanecer en herramientas privadas como Drive, con menos integración.
+

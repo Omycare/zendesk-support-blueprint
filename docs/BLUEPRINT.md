@@ -2,6 +2,10 @@
 
 24 de septiembre de 2026 · Reservas, documentos y pestañas de trabajo · Portal FR/EN · Responsable: Stephanie
 
+## Actualización Firebase — código preparado
+
+La captura de Stephanie identifica el proyecto `omycare-portal`. Se preparó la versión con Google/email verificado, guardado privado por cliente, conversaciones por contexto y notas internas. Construcción y 19 pruebas nuevas aprobadas. **No está publicada en Firebase todavía**: faltan activación de Authentication y Firestore, autorización de despliegue y alta administrativa. Las páginas existentes conservan su funcionamiento anterior. Ver [Activación y actualizaciones de Firebase](../firebase/README.md) y [registro de cambios](../firebase/CHANGELOG.md).
+
 ## Producto
 
 Un espacio de trabajo por cliente: respuestas guiadas, ejemplos y simulaciones de Zendesk, más visibilidad del trabajo de configuración. El cliente completa pequeñas etapas a su ritmo y puede dejar decisiones pendientes. Stephanie actualiza el trabajo, las reuniones y el alcance de las formaciones.
