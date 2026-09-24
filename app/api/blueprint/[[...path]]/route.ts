@@ -3,13 +3,14 @@ import { normalizeTracking, safeTrainingURL } from '@/frontend/tracking-data.js'
 import { normalizeExtensions } from '@/frontend/extensions.js';
 import { defaultCourses } from '@/frontend/course-catalog.js';
 import { sections } from '@/frontend/content.js';
+import { normalizeWorkspace } from '@/frontend/workspace-data.js';
 export const dynamic = 'force-dynamic';
 const OWNER = 'stephanie@omycare.fr';
 const response = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff' } });
 const protectedCourses: Record<string, string> = { 'omycare-agents': 'AGENT_TRAINING_CODE', 'omycare-admins': 'ADMIN_TRAINING_CODE' };
 function cleanState(raw: any) {
   if (raw?.schemaVersion !== 1 || !raw.sections) throw Error('invalid');
-  const result: any = { schemaVersion: 1, lang: raw.lang === 'en' ? 'en' : 'fr', step: 0, sections: {}, tracking: normalizeTracking(raw.tracking), extensions: normalizeExtensions(raw.extensions) };
+  const result: any = { schemaVersion: 1, lang: raw.lang === 'en' ? 'en' : 'fr', step: 0, sections: {}, tracking: normalizeTracking(raw.tracking), extensions: normalizeExtensions(raw.extensions), workspace: normalizeWorkspace(raw.workspace) };
   for (const s of sections) {
     const x = raw.sections[s.id];
     if (!x || !Array.isArray(x.rows) || x.rows.length > 2000) throw Error('invalid');
@@ -22,6 +23,7 @@ function cleanState(raw: any) {
 }
 function diff(before: any, after: any) {
   const changes: string[] = [];
+  if (JSON.stringify(before.workspace) !== JSON.stringify(after.workspace)) changes.push('workspace');
   for (const s of sections) if (JSON.stringify(before.sections[s.id]) !== JSON.stringify(after.sections[s.id])) changes.push(`document:${s.id}`);
   for (const t of after.tracking.tasks) {
     const old = before.tracking.tasks.find((r: any) => r.id === t.id);
@@ -158,7 +160,10 @@ async function handler(req: Request) {
     }
     if (req.method !== 'PUT') return response({ error: 'method' }, 405);
     if (body.revision !== project.revision) return response({ error: 'conflict' }, 409);
-    const next = cleanState(body.data); if (!owner) next.tracking = data.tracking;
+    const next = cleanState(body.data);
+    // Older clients must not erase the newly introduced workspace.
+    if (!Object.prototype.hasOwnProperty.call(body.data, 'workspace')) next.workspace = data.workspace;
+    if (!owner) { next.tracking = data.tracking; next.workspace.driveFolderUrl = data.workspace.driveFolderUrl; }
     const changes = diff(data, next); if (!changes.length) return response({ revision: project.revision });
     const revision = project.revision + 1, nonce = crypto.randomUUID(), now = new Date().toISOString();
     const result = await db.batch([db.prepare('UPDATE blueprint_projects SET name=?,data=?,revision=?,updated_at=?,last_mutation=? WHERE id=? AND revision=?').bind(String(next.sections.company.values.name || project.name).slice(0, 200), JSON.stringify(next), revision, now, nonce, id, project.revision), db.prepare('INSERT INTO blueprint_events (project_id,at,actor,changes) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM blueprint_projects WHERE id=? AND last_mutation=?)').bind(id, now, email, JSON.stringify(changes), id, nonce)]);

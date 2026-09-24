@@ -8,6 +8,8 @@ French/English Zendesk discovery portal and shared implementation tracker. Built
 - Read-only mapping of the supplied French Workflow workbook's 26 tabs, with 12 optional detailed tables. The source spreadsheet is unchanged. Exports are new files, not an exact copy preserving workbook layout/formulas.
 - 27 implementation tasks transcribed from KAN-548 through KAN-574. Consultant-maintained status, actual hours and client-visible notes; no live Jira/Zendesk synchronization.
 - Exactly eight 30-minute meetings. Held checkboxes, dates and notes; meetings and configuration hours use separate totals.
+- Cal.com meeting booking and course-specific training booking buttons, with per-project course entitlement visibility. Bookings do not automatically consume the eight-meeting allowance.
+- Per-project working tabs with shared notes, tables, document links and reversible archiving. Stephanie alone assigns the client's Google Drive folder; the server preserves that setting on client writes. Uploads currently happen inside Drive after opening the folder, not directly through this app.
 - Two supplied OmyCare training links preconfigured in a reusable catalog. Enable training and select purchased resources per project. Their codes are checked by the server, with eight attempts per 15 minutes per authenticated user/course.
 - Named consultant invitation details, Zendesk URL and account owner email. Optional encrypted, expiring, single-retrieval credential handover. Passwords never enter the project JSON or exports.
 - Shared D1 data, server-authorized project memberships and roles, audit history, optimistic revisions, idle refresh and recoverable conflict handling.
@@ -19,6 +21,8 @@ French/English Zendesk discovery portal and shared implementation tracker. Built
 The Site is private. Sign in as Stephanie to create a project, authorize the client's email in Project tracking, and grant that client platform-level Site access through Share. A client needs both Site access and project membership and signs in with ChatGPT. No invitation is sent automatically.
 
 Clients edit discovery answers and read configuration/meetings. Only the consultant edits tasks, hours, meetings, entitlements, catalog and memberships. The client preview is only a display aid; server checks provide actual authorization.
+
+Clients and Stephanie can create and edit project workspaces. Drive permissions are independent from portal membership and must be restricted to the correct client. See `docs/COLLABORATION-AND-DRIVE.md` for the new workflow and the pending direct Drive upload and threaded-conversation specifications.
 
 ## Access handover and course codes
 

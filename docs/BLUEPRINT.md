@@ -1,6 +1,6 @@
 # OmyCare - Blueprint de entrega
 
-23 de septiembre de 2026 · Publicación en GitHub · Portal FR/EN · Responsable: Stephanie
+24 de septiembre de 2026 · Reservas, documentos y pestañas de trabajo · Portal FR/EN · Responsable: Stephanie
 
 ## Producto
 
@@ -72,6 +72,14 @@ Dos avances independientes: pasos del documento marcados como revisados y tareas
 
 Hay exactamente ocho reuniones de 30 minutos: fecha, nota y casilla de realizada. Solo las casillas marcadas consumen el contador. El total máximo previsto es 240 minutos; las horas de configuración se contabilizan por separado y no representan una factura.
 
+El botón para reservar reuniones abre https://cal.com/stephaniebuquet. Reservar no marca automáticamente una reunión como celebrada; el seguimiento del cupo sigue siendo manual.
+
+## Documentos y pestañas de trabajo
+
+La sección Documents & ateliers / Documents & workspaces permite crear pestañas por tema, con notas compartidas, tablas de trabajo y enlaces a documentos. Se pueden archivar y restaurar, y se incluyen en JSON/XLSX. Stephanie asigna una carpeta de Google Drive por proyecto; los clientes pueden abrirla y subir allí sus archivos con sus permisos de Google, pero no cambiar su asignación en el portal.
+
+La carga actual se realiza al abrir la carpeta en Google Drive. La carga automática desde la web hacia esa carpeta necesita una conexión Google autorizada y todavía no está activa. Tampoco se activaron conversaciones con hilos: las notas siguen siendo texto editable. El diseño completo de ambas ampliaciones está en [Documentos, reservas y colaboración](COLLABORATION-AND-DRIVE.md).
+
 | Jira | Tarea FR | Task EN |
 | --- | --- | --- |
 | KAN-548 | Modèle des emails | Email template |
@@ -117,6 +125,8 @@ La contraseña puede ser recuperada una sola vez por Stephanie; después se elim
 Catálogo compartido con las dos URLs entregadas: agentes y administradores. Cada proyecto tiene una casilla de formaciones incluidas y selección individual de los cursos contratados. Los enlaces seleccionados se muestran al cliente después de validar su código en el servidor; las claves indicadas por Stephanie se configuraron como secretos y no se distribuyen en este documento. Los intentos están limitados por usuario y curso.
 
 La validación protege el paso de apertura dentro del portal. No vuelve privados los sitios públicos existentes en GitHub Pages: una persona que ya tenga una URL directa puede abrirla. Para restringir también el contenido original hay que cambiar su alojamiento o su control de acceso. Las formaciones adicionales del catálogo admiten enlaces HTTPS, sin un código nuevo automático.
+
+Las tarjetas de cursos habilitados ofrecen además la reserva de formación: agentes en https://cal.com/stephaniebuquet/agent-formation y administradores en https://cal.com/stephaniebuquet/admin-formation. Los enlaces no aparecen como opciones de formación para clientes sin ese curso incluido. Los calendarios externos conservan sus propios controles de acceso.
 
 ## Guardado y exportación
 

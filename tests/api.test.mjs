@@ -1,9 +1,10 @@
+import {bookingLinks,normalizeWorkspace,safeDriveFolderURL,safeDocumentURL} from '../frontend/workspace-data.js';
 import {normalizeExtensions} from '../frontend/extensions.js';import {defaultCourses} from '../frontend/course-catalog.js';
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import ts from 'typescript';import {DatabaseSync} from 'node:sqlite';import {webcrypto} from 'node:crypto';import {sections} from '../frontend/content.js';import {freshTracking,normalizeTracking,safeTrainingURL} from '../frontend/tracking-data.js';
 const sql=new DatabaseSync(':memory:');for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sql.exec(fs.readFileSync('drizzle/'+file,'utf8').replaceAll('--> statement-breakpoint',''));
 const prepare=text=>({values:[],bind(...values){this.values=values;return this},async first(){return sql.prepare(text).get(...this.values)||null},async all(){return {results:sql.prepare(text).all(...this.values)}},async run(){const result=sql.prepare(text).run(...this.values);return{meta:{changes:Number(result.changes)}}}});
 const db={prepare,async batch(items){sql.exec('BEGIN');try{const results=[];for(const q of items)results.push(await q.run());sql.exec('COMMIT');return results}catch(e){sql.exec('ROLLBACK');throw e}}};
-const module={exports:{}};const context=vm.createContext({module,exports:module.exports,require:id=>id==='@/db/raw'?{database:()=>db,runtimeSecrets:()=>({CREDENTIAL_ENCRYPTION_KEY:'a'.repeat(64),AGENT_TRAINING_CODE:'test-agent-code',ADMIN_TRAINING_CODE:'test-admin-code'})}:id.includes('tracking-data')?{normalizeTracking,safeTrainingURL}:id.includes('extensions')?{normalizeExtensions}:id.includes('course-catalog')?{defaultCourses}:{sections},Response,Request,URL,TextEncoder,TextDecoder,crypto:webcrypto,console});const js=ts.transpileModule(fs.readFileSync('app/api/blueprint/[[...path]]/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;vm.runInContext(js,context);const handler=module.exports.GET;
+const module={exports:{}};const context=vm.createContext({module,exports:module.exports,require:id=>id==='@/db/raw'?{database:()=>db,runtimeSecrets:()=>({CREDENTIAL_ENCRYPTION_KEY:'a'.repeat(64),AGENT_TRAINING_CODE:'test-agent-code',ADMIN_TRAINING_CODE:'test-admin-code'})}:id.includes('tracking-data')?{normalizeTracking,safeTrainingURL}:id.includes('workspace-data')?{normalizeWorkspace}:id.includes('extensions')?{normalizeExtensions}:id.includes('course-catalog')?{defaultCourses}:{sections},Response,Request,URL,TextEncoder,TextDecoder,crypto:webcrypto,console});const js=ts.transpileModule(fs.readFileSync('app/api/blueprint/[[...path]]/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;vm.runInContext(js,context);const handler=module.exports.GET;
 const blank=()=>({schemaVersion:1,sections:Object.fromEntries(sections.map(s=>[s.id,{values:{},rows:[],notes:'',reviewed:false,deferred:false}])),tracking:freshTracking()});
 async function call(path,method='GET',body,who='stephanie@omycare.fr',origin='https://test.example'){const headers={'Content-Type':'application/json',origin};if(who){headers['oai-authenticated-user-id']='verified-'+who;headers['oai-authenticated-user-email']=who}const r=await handler(new Request('https://test.example/api/blueprint/'+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})}));return{status:r.status,data:await r.json()}}
 assert.equal((await call('session','GET',null,'')).status,401);let created=await call('projects','POST',{name:'A',data:blank()});assert.equal(created.status,201);const id=created.data.id;assert.equal((await call('projects/'+id,'GET',null,'a@example.com')).status,404);assert.equal((await call('projects','POST',{name:'hack',data:blank()},'a@example.com')).status,403);
@@ -46,3 +47,22 @@ assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM blueprint_credentials').get(
 assert.equal((await call('projects/'+id+'/credentials','POST',secret,'a@example.com','https://evil.example')).status,403);
 console.log('PASS: training codes, entitlement, rate limit, encrypted handover, one-time retrieval, expiry, no secrets in project data.');
 console.log('PASS: real SQLite-backed API; authentication, project isolation, consultant permissions, client edits, hidden training links, revision conflicts, shared catalog, eight meetings and audit log.');
+// Only Stephanie may assign the folder, including during client imports.
+let wsProject=await call('projects/'+id);
+wsProject.data.data.workspace={driveFolderUrl:'https://drive.google.com/drive/folders/client_A',tabs:[]};
+assert.equal((await call('projects/'+id,'PUT',{revision:wsProject.data.revision,data:wsProject.data.data})).status,200);
+wsProject=await call('projects/'+id,'GET',null,'a@example.com');
+wsProject.data.data.workspace.driveFolderUrl='https://drive.google.com/drive/folders/client_B';
+wsProject.data.data.workspace.tabs.push({id:'migration',title:'Migration',notes:'Shared note',rows:[{item:'Users',detail:'CSV to review',status:'todo'}],documents:[{title:'Example',url:'https://docs.google.com/document/d/example/edit'}]});
+assert.equal((await call('projects/'+id,'PUT',{revision:wsProject.data.revision,data:wsProject.data.data},'a@example.com')).status,200);
+wsProject=await call('projects/'+id);
+assert.equal(wsProject.data.data.workspace.driveFolderUrl,'https://drive.google.com/drive/folders/client_A');
+assert.equal(wsProject.data.data.workspace.tabs[0].title,'Migration');
+assert.ok(wsProject.data.events.some(e=>e.changes.includes('workspace')));
+assert.equal((await call('projects/'+id,'GET',null,'b@example.com')).status,404);
+// An old client or old backup without workspace data cannot erase it.
+delete wsProject.data.data.workspace;
+wsProject.data.data.sections.company.notes='Old client change';
+assert.equal((await call('projects/'+id,'PUT',{revision:wsProject.data.revision,data:wsProject.data.data},'a@example.com')).status,200);
+assert.equal((await call('projects/'+id)).data.data.workspace.tabs.length,1);
+console.log('PASS: server-enforced folder ownership, client workspace edits, project isolation, audit and backwards compatibility.');

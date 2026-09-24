@@ -1,7 +1,8 @@
+import {bookingLinks,normalizeWorkspace,safeDriveFolderURL,safeDocumentURL} from '../frontend/workspace-data.js';
 import {extensionDefinitions,sourceMapping,normalizeExtensions} from '../frontend/extensions.js';import {defaultCourses} from '../frontend/course-catalog.js';
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {sections,words,sources} from '../frontend/content.js';import {workbook} from '../frontend/xlsx.js';import {taskDefinitions,taskStates,freshTracking,normalizeTracking,metrics,safeTrainingURL} from '../frontend/tracking-data.js';
 const nodes=new Map();const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',textContent:'',value:'',dataset:{},addEventListener(){},remove(){},click(){},showModal(){},close(){}});return nodes.get(selector)};
-const store=new Map();const ctx=vm.createContext({extensionDefinitions,sourceMapping,normalizeExtensions,defaultCourses,sections,words,sources,workbook,taskDefinitions,taskStates,freshTracking,normalizeTracking,metrics,safeTrainingURL,console,structuredClone,Blob,URL,TextEncoder,setTimeout:()=>{},document:{documentElement:{},querySelector:node,querySelectorAll:()=>[],createElement:()=>node('created'),body:{append(){}}},window:{scrollTo(){},print(){}},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)}});
+const store=new Map();const ctx=vm.createContext({bookingLinks,normalizeWorkspace,safeDriveFolderURL,safeDocumentURL,extensionDefinitions,sourceMapping,normalizeExtensions,defaultCourses,sections,words,sources,workbook,taskDefinitions,taskStates,freshTracking,normalizeTracking,metrics,safeTrainingURL,console,structuredClone,Blob,URL,TextEncoder,setTimeout:()=>{},document:{documentElement:{},querySelector:node,querySelectorAll:()=>[],createElement:()=>node('created'),body:{append(){}}},window:{scrollTo(){},print(){}},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)}});
 const source=fs.readFileSync(new URL('../frontend/app.js',import.meta.url),'utf8').replace(/^import .*;$/gm,'');vm.runInContext(source,ctx);const run=s=>vm.runInContext(s,ctx);
 for(const lang of ['fr','en'])for(let i=0;i<sections.length;i++){run(`pageView='questionnaire';state.lang='${lang}';state.step=${i};render()`);assert.ok(node('#app').innerHTML.includes(sections[i].title[lang].replaceAll('&','&amp;')));if(sections[i].sample){run(`action('sample')`);assert.ok(!node('#app').innerHTML.includes('[object Object]'))}}
 run("state=fresh();state.step=4;action('sample')");assert.equal(run('issues(section()).length'),0);run("d('fields').rows.push(structuredClone(d('fields').rows[0]))");assert.ok(run('issues(section()).length')>0);
@@ -13,4 +14,22 @@ run("state=fresh();state.step=4;action('sample');download=(name,data)=>{globalTh
 run("state.step=9;action('sample');sim={group:'Service client',status:'open'};action('testrule')");assert.ok(node('#ruleresult').textContent.includes('Logistique'));run("sim.group='Other';action('testrule')");assert.ok(node('#ruleresult').textContent.includes('Pas de correspondance'));
 const blob=workbook([{name:'Fields',rows:[['FR','EN'],['Numéro','Order'],['=1+1','<script>'],['Line\n2','✅']]}]);fs.writeFileSync('/tmp/blueprint-export-test.xlsx',Buffer.from(await blob.arrayBuffer()));
 assert.equal(sourceMapping.length,26);assert.equal(run('extensionSheets().length'),12);
+// Links must remain HTTPS, Drive folders must be real Google folder URL shapes.
+assert.equal(safeDriveFolderURL('https://drive.google.com/drive/u/1/folders/client_A?usp=sharing'),'https://drive.google.com/drive/folders/client_A');
+assert.equal(safeDriveFolderURL('https://drive.google.com.evil.test/drive/folders/client_A'),'');
+assert.equal(safeDriveFolderURL('https://drive.google.com/file/d/document_A/view'),'');
+assert.equal(safeDocumentURL('javascript:alert(1)'),'');
+assert.equal(safeDocumentURL('https://user:password@example.com/file'),'');
+assert.deepEqual(normalizeWorkspace().tabs,[]);
+run("state=fresh();state.workspace={driveFolderUrl:'https://drive.google.com/drive/folders/client_A',tabs:[{id:'topic_1',title:'<Testing>',notes:'<script>no</script>',archived:false,rows:[],documents:[]}]};pageView='documents';cloud.role='client'");
+for(const lang of ['fr','en']){run(`state.lang='${lang}';render()`);assert.ok(node('#app').innerHTML.includes('&lt;Testing&gt;'));assert.ok(!node('#app').innerHTML.includes('id="drive-folder-form"'));assert.ok(node('#app').innerHTML.includes('https://drive.google.com/drive/folders/client_A'));}
+assert.equal(run('validate(JSON.parse(JSON.stringify(state))).workspace.tabs[0].title'),'<Testing>');
+assert.equal(run('workspaceSheets().length'),2);
+run("state=fresh();cloud.resources=defaultCourses;cloud.role='client'");
+assert.ok(!run('trainingView()').includes(bookingLinks['omycare-agents']));
+run("state.tracking.trainingIncluded=true;state.tracking.trainingIds=['omycare-agents']");
+assert.ok(run('trainingView()').includes(bookingLinks['omycare-agents']));
+assert.ok(!run('trainingView()').includes(bookingLinks['omycare-admins']));
+assert.ok(run('meetingsView(metrics(state))').includes(bookingLinks.meeting));
+console.log('PASS: FR/EN workspaces, URL validation, client folder controls, workspace export, paid-course booking visibility.');
 console.log('PASS: FR/EN rendering, examples, conditional forms, validation, escaping, CSV safety, paste parsing, roundtrip persistence, API draft, routing, workbook generation.');
