@@ -136,6 +136,8 @@ JSON: restauración de respuestas, notas, revisiones, tareas, reuniones y selecc
 
 ## Alojamiento y operación
 
+Actualización de arquitectura del 24/09/2026: la condición de no añadir suscripciones se analiza en [Portal central sin nuevas suscripciones](ZERO-COST-PORTAL.md). Se recomienda conservar el código en GitHub y usar Firebase Hosting, Authentication y Firestore en Spark para una futura versión con acceso por email. Es una propuesta con cuotas y cambios pendientes, no una migración ya realizada. El funcionamiento descrito a continuación sigue siendo el actualmente publicado.
+
 Frontend HTML/CSS/JavaScript, API autenticada en Worker y D1 para proyectos, miembros, historial, catálogo, acceso cifrado e intentos de código. Los secretos se mantienen en el servicio de alojamiento. El código está preparado con migraciones y pruebas.
 
 GitHub Pages sirve archivos estáticos. La página de GitHub publica el cuestionario y los simuladores completos en modo local. Un aviso permanente explica que las respuestas quedan en el navegador y ofrece un botón para abrir el proyecto compartido. La página estática no sustituye el servicio compartido. Publicar todo el frontend compartido directamente en Pages exigiría otro backend autenticado; no se presenta como resuelto mediante almacenamiento local.
