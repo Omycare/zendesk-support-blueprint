@@ -7,6 +7,7 @@
 
 .pages-access{display:flex;gap:22px;align-items:center;justify-content:space-between;background:#f0ebff;border-bottom:1px solid #d8cff2;padding:18px 36px}.pages-access strong,.pages-access span{display:block}.pages-access span{font-size:.875rem;line-height:1.6;max-width:650px;margin-top:5px}.shared-entry{display:block;text-decoration:none;background:#5a3297;color:white;border-radius:8px;padding:12px 18px;font-size:.875rem;white-space:nowrap}@media(max-width:900px){.pages-access{flex-direction:column;align-items:start;padding:16px}.shared-entry{white-space:normal}}
 /* Client documents and working tabs */
+.booking-callout a.button,.drive-card a.button{display:inline-block;padding:12px 18px;border:1px solid #5a3297;border-radius:8px;background:#5a3297;color:#fff;text-decoration:none;font-weight:600}.booking-callout a.button:hover,.drive-card a.button:hover{background:#442473}
 .booking-callout{display:flex;align-items:center;justify-content:space-between;gap:24px}.booking-callout p{margin-bottom:0}.booking-callout .button{white-space:nowrap}
 .drive-card h2{margin-top:12px}.drive-settings{margin-top:20px;border-top:1px solid var(--border,#dedbe9);padding-top:16px}.drive-settings summary{cursor:pointer;font-weight:600}.drive-settings form{margin-top:18px}.drive-settings input{max-width:760px}
 .worktab-list{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0 20px;border-bottom:1px solid #dedbe9;padding-bottom:16px}.worktab-list button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
